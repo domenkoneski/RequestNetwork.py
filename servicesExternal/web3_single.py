@@ -1,48 +1,61 @@
+import asyncio
+
 from typing import Any, List
 from web3 import Web3 as WEB3
-
 from config import config
-class Singleton(type):
-    _instances = {}
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        #not sure about should we use else or not
-        else:
-            cls._instances[cls].__init__(*args, **kwargs)
-        return cls.__instance
 
+class Web3Single:
 
-class Web3Single(metaclass = Singleton):
-    def __init__(self, web3Provider: Any = None, networkId: int = None):
-        self.web3 = WEB3(web3Provider or new WEB3.providers.HttpProvider(config.ethereum.nodeUrlDefault[config.ethereum.default])) #put here right link
-        self.networkId = Web3Single.getNetworkName(networkId) if networkId  else config.ethereum.default
+    _instance = None
 
     @staticmethod
-    def getInstance():
-        return new Web3Single()
+    def init(web3provider, network_id):
+        Web3Single._instance = Web3Single(web3Provider, network_id)
 
-    # We skip BN because it's useless in Python
+    def __init__(self, web3Provider: Any = None, network_id: int = None):
+        self.web3(web3Provider if web3Provider else WEB3.providers.HttpProvider(config["ethereum"]["nodeURLDefault"][config["ethereum"]["default"]]))
+        self.networkId = Web3Single.get_network_name(networkId) if networkId else config["ethereum"]["default"]
 
     @staticmethod
-    def getNetworkName(networkId: int ) -> str:
-        return {1 : 'main', 2 :'morden', 3 : 'ropsten', 4 : 'rinkeby', 42 :'kovan'}.get(networkId,'private')
+    def get_instance():
+        return _instance
+
+    @staticmethod
+    def BN():
+        return WEB3.utils.BN
+
+    @staticmethod
+    def get_network_name(networkId: int ) -> str:
+        return {1: 'main', 2: 'morden', 3: 'ropsten', 4: 'rinkeby', 42:'kovan'}.get(networkId, 'private')
 
     # Async
-    def broadcastMethod(self,
+    async def broadcast_method(self,
                         method: Any,
                         callbackTranactionHash,
                         callbackTransactionReceipt,
                         callbackTransactionConfirmation,
                         callbackTransactionError,
                         options: Any = None):
+        options = dict(options)
+        options["numberOfConfirmation"] = None
+
+        if not options["from"]:
+            try:
+                accounts = await self.web3.eth.get_accounts()
+                options["from"] = accounts[0]
+            except Exception as e:
+                return callbackTransactionError(e)
+
+        forced_gas = options["gas"]
+        options["value"] = options["value"] if options["value"] else 0
+        options["gasPrice"] = options["gasPrice"] if options["gasPrice"] else self.web3.utils.toWei(config["ethereum"]["gasPriceDefault"], config["ethereum"]["gasPriceDefaultUnity"])
+
+        #   TODO method call and fee(gas) estimation
+
+    async def call_method(self, method, options: Any = None):
         pass
 
-    def callMethod(self, method, options: Any = None):
-        pass
-
-    # Async
-    def getDefaultAccount(self):
+    async def get_default_account(self):
         pass
 
     # Async
